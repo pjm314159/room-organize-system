@@ -81,38 +81,39 @@ pacman -S mingw-w64-x86_64-sqlite3
 
 ## 4. 编译项目
 
-### 4.1 使用命令行编译
+### 4.1 使用 Makefile（推荐）
 
-打开命令提示符或 PowerShell，进入项目 `src` 目录：
-
-```cmd
-cd "d:\Project\organize system\src"
-```
-
-编译命令：
+打开命令提示符或 PowerShell，进入项目根目录：
 
 ```cmd
-gcc -o schedule_system.exe main.c db.c ui.c logic.c -lsqlite3 -I"C:\mingw64\include" -L"C:\mingw64\lib"
+cd "d:\Project\organize system"
 ```
 
-如果遇到链接错误，尝试静态链接：
-
-```cmd
-gcc -o schedule_system.exe main.c db.c ui.c logic.c -lsqlite3 -static
-```
-
-### 4.2 使用 Makefile
-
-如果安装了 `make` 工具：
+使用 make 编译：
 
 ```cmd
 make
 ```
 
-或手动指定编译器路径：
+或使用 mingw32-make：
 
 ```cmd
 mingw32-make
+```
+
+编译完成后，可执行文件位于 `bin/schedule_system.exe`。
+
+### 4.2 使用命令行编译
+
+```cmd
+cd "d:\Project\organize system"
+gcc -o bin/schedule_system.exe src/main.c src/db.c src/ui.c src/logic.c -lsqlite3 -I"C:\mingw64\include" -L"C:\mingw64\lib"
+```
+
+如果遇到链接错误，尝试静态链接：
+
+```cmd
+gcc -o bin/schedule_system.exe src/main.c src/db.c src/ui.c src/logic.c -lsqlite3 -static
 ```
 
 ### 4.3 常见编译问题
@@ -149,27 +150,19 @@ cannot find -lsqlite3
 
 ## 5. 运行程序
 
-### 5.1 准备数据目录
+### 5.1 运行
 
-确保 `data` 目录存在：
-
-```cmd
-cd "d:\Project\organize system"
-if not exist data mkdir data
-```
-
-### 5.2 运行程序
-
-```cmd
-cd "d:\Project\organize system\src"
-schedule_system.exe
-```
-
-或者从项目根目录运行：
+程序会自动创建 `data` 目录，无需手动创建。
 
 ```cmd
 cd "d:\Project\organize system"
-src\schedule_system.exe
+bin\schedule_system.exe
+```
+
+或使用 make 运行：
+
+```cmd
+make run
 ```
 
 ---
@@ -196,13 +189,13 @@ src\schedule_system.exe
             "type": "shell",
             "command": "gcc",
             "args": [
-                "-o", "schedule_system.exe",
-                "main.c", "db.c", "ui.c", "logic.c",
+                "-o", "bin/schedule_system.exe",
+                "src/main.c", "src/db.c", "src/ui.c", "src/logic.c",
                 "-lsqlite3",
                 "-Wall", "-Wextra"
             ],
             "options": {
-                "cwd": "${workspaceFolder}/src"
+                "cwd": "${workspaceFolder}"
             },
             "problemMatcher": ["$gcc"],
             "group": {
@@ -213,9 +206,9 @@ src\schedule_system.exe
         {
             "label": "run",
             "type": "shell",
-            "command": "./schedule_system.exe",
+            "command": "./bin/schedule_system.exe",
             "options": {
-                "cwd": "${workspaceFolder}/src"
+                "cwd": "${workspaceFolder}"
             },
             "dependsOn": "build"
         }
@@ -233,7 +226,7 @@ src\schedule_system.exe
         {
             "name": "Windows",
             "includePath": [
-                "${workspaceFolder}/**",
+                "${workspaceFolder}/src",
                 "C:/mingw64/include"
             ],
             "defines": ["_WIN32"],
@@ -257,16 +250,18 @@ d:\Project\organize system\
 │   ├── tasks.md                    # 开发任务
 │   ├── data-structure-optimization.md
 │   └── windows-setup.md            # 本文档
-├── data/                           # 数据库文件目录
-│   └── schedule.db                 # SQLite 数据库（运行时生成）
 ├── src/                            # 源代码目录
 │   ├── main.c                      # 主程序
 │   ├── types.h                     # 类型定义
 │   ├── db.h / db.c                 # 数据库模块
 │   ├── ui.h / ui.c                 # 用户界面模块
-│   ├── logic.h / logic.c           # 业务逻辑模块
-│   └── Makefile                    # 编译配置
-└── schedule_system.exe             # 编译生成的可执行文件
+│   └── logic.h / logic.c           # 业务逻辑模块
+├── build/                          # 编译中间文件（自动生成）
+├── bin/                            # 可执行文件目录（自动生成）
+│   └── schedule_system.exe         # 编译生成的可执行文件
+├── data/                           # 数据库文件目录（自动生成）
+│   └── schedule.db                 # SQLite 数据库
+└── Makefile                        # 编译配置
 ```
 
 ---
@@ -279,18 +274,14 @@ d:\Project\organize system\
 # 1. 进入项目目录
 cd "d:\Project\organize system"
 
-# 2. 确保数据目录存在
-if not exist data mkdir data
+# 2. 编译
+make
 
-# 3. 进入源代码目录
-cd src
-
-# 4. 编译
-gcc -o schedule_system.exe main.c db.c ui.c logic.c -lsqlite3
-
-# 5. 运行
-schedule_system.exe
+# 3. 运行
+bin\schedule_system.exe
 ```
+
+> **注意**：程序首次运行时会自动创建 `data` 目录和数据库文件。
 
 ---
 
@@ -340,11 +331,14 @@ A: 可能是数据库路径问题：
 
 ### Q: 中文显示乱码
 
-A: 在命令提示符中设置编码：
+A: 程序已自动设置 UTF-8 编码。如果仍有问题，请确保：
+- 使用 Windows Terminal 或支持 UTF-8 的终端
+- 源代码文件使用 UTF-8 编码保存
+
+如果使用传统命令提示符，可手动设置：
 ```cmd
 chcp 65001
 ```
-或使用 Windows Terminal 并设置为 UTF-8 编码。
 
 ---
 

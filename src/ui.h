@@ -3,6 +3,9 @@
 
 #include "types.h"
 
+void ui_clear_screen(void);
+void ui_clear_line(void);
+
 void ui_show_main_menu(void);
 int ui_get_main_choice(void);
 

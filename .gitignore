@@ -1,0 +1,5 @@
+build
+data
+bin
+!bin/libsqlite3-0.dll
+.idea

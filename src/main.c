@@ -5,7 +5,38 @@
 #include "ui.h"
 #include "logic.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#include <io.h>
+#include <fcntl.h>
+#endif
+
+static void setup_console_utf8(void) {
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hOut != INVALID_HANDLE_VALUE) {
+        DWORD mode = 0;
+        if (GetConsoleMode(hOut, &mode)) {
+            mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            SetConsoleMode(hOut, mode);
+        }
+    }
+    HANDLE hIn = GetStdHandle(STD_INPUT_HANDLE);
+    if (hIn != INVALID_HANDLE_VALUE) {
+        DWORD mode = 0;
+        if (GetConsoleMode(hIn, &mode)) {
+            mode |= ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT;
+            SetConsoleMode(hIn, mode);
+        }
+    }
+#endif
+}
+
 int main(void) {
+    setup_console_utf8();
+    
     printf("\n");
     printf("========================================\n");
     printf("      欢迎使用机房排课系统\n");

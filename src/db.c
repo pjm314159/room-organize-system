@@ -1,8 +1,54 @@
 #include "db.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#include <shlobj.h>
+#else
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <errno.h>
+#endif
+
 static sqlite3 *db = NULL;
 
+static int ensure_directory_exists(const char *filepath) {
+    char dir_path[512];
+    const char *last_slash = strrchr(filepath, '/');
+    const char *last_backslash = strrchr(filepath, '\\');
+    const char *last_sep = last_slash > last_backslash ? last_slash : last_backslash;
+    
+    if (!last_sep) {
+        return SUCCESS;
+    }
+    
+    size_t dir_len = last_sep - filepath;
+    if (dir_len >= sizeof(dir_path)) {
+        return FAILURE;
+    }
+    
+    strncpy(dir_path, filepath, dir_len);
+    dir_path[dir_len] = '\0';
+    
+#ifdef _WIN32
+    if (CreateDirectoryA(dir_path, NULL) == 0) {
+        if (GetLastError() != ERROR_ALREADY_EXISTS) {
+            return FAILURE;
+        }
+    }
+#else
+    if (mkdir(dir_path, 0755) != 0 && errno != EEXIST) {
+        return FAILURE;
+    }
+#endif
+    
+    return SUCCESS;
+}
+
 int db_init(const char *db_path) {
+    if (ensure_directory_exists(db_path) != SUCCESS) {
+        fprintf(stderr, "无法创建数据目录\n");
+    }
+    
     if (sqlite3_open(db_path, &db) != SQLITE_OK) {
         fprintf(stderr, "无法打开数据库: %s\n", sqlite3_errmsg(db));
         return FAILURE;
