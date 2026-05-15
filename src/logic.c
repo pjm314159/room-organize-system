@@ -1,9 +1,26 @@
+/**
+ * @file logic.c
+ * @brief 业务逻辑模块实现
+ * @author Computer Room Scheduling System
+ * @version 1.0
+ * @date 2024
+ * 
+ * @description
+ * 本文件实现了所有业务逻辑函数，负责处理用户交互、数据验证、
+ * 业务规则检查（如冲突检测）等核心业务功能。
+ */
+
 #include "logic.h"
 #include "ui.h"
+
+/*============================================================================
+ * 机房管理业务逻辑
+ *============================================================================*/
 
 int logic_add_room(void) {
     ComputerRoom room;
 
+    /* 获取用户输入 */
     ui_input_string("请输入机房编号: ", room.room_no, sizeof(room.room_no));
     if (strlen(room.room_no) == 0) {
         ui_show_error("机房编号不能为空");
@@ -19,6 +36,7 @@ int logic_add_room(void) {
     room.capacity = ui_input_int_range("请输入容纳人数: ", 1, 500);
     room.status = ui_input_int_range("请输入状态 (0-正常, 1-维护): ", 0, 1);
 
+    /* 调用数据库接口 */
     int result = db_create_room(&room);
     if (result == SUCCESS) {
         ui_show_success("机房添加成功");
@@ -51,6 +69,7 @@ int logic_update_room(void) {
     int id = ui_input_int("请输入要修改的机房ID (0返回): ");
     if (id == 0) return SUCCESS;
 
+    /* 查询现有记录 */
     ComputerRoom room;
     if (db_get_room_by_id(id, &room) != SUCCESS) {
         ui_show_error("机房不存在");
@@ -58,9 +77,9 @@ int logic_update_room(void) {
     }
 
     ui_display_room(&room);
-
     printf("\n请输入新信息 (直接回车保持原值):\n");
 
+    /* 获取新值（可选） */
     char buffer[100];
     ui_input_string("机房编号: ", buffer, sizeof(buffer));
     if (strlen(buffer) > 0) strcpy(room.room_no, buffer);
@@ -73,6 +92,7 @@ int logic_update_room(void) {
 
     room.status = ui_input_int_range("状态 (0-正常, 1-维护): ", 0, 1);
 
+    /* 更新数据库 */
     int result = db_update_room(&room);
     if (result == SUCCESS) {
         ui_show_success("修改成功");
@@ -95,6 +115,7 @@ int logic_delete_room(void) {
 
     ui_display_room(&room);
 
+    /* 确认删除 */
     if (ui_input_confirm("确认删除") == 'Y') {
         int result = db_delete_room(id);
         if (result == SUCCESS) {
@@ -108,6 +129,10 @@ int logic_delete_room(void) {
     ui_show_warning("取消删除");
     return SUCCESS;
 }
+
+/*============================================================================
+ * 教师管理业务逻辑
+ *============================================================================*/
 
 int logic_add_teacher(void) {
     Teacher teacher;
@@ -165,7 +190,6 @@ int logic_update_teacher(void) {
     }
 
     ui_display_teacher(&teacher);
-
     printf("\n请输入新信息 (直接回车保持原值):\n");
 
     char buffer[100];
@@ -214,6 +238,10 @@ int logic_delete_teacher(void) {
     return SUCCESS;
 }
 
+/*============================================================================
+ * 课程管理业务逻辑
+ *============================================================================*/
+
 int logic_add_course(void) {
     Course course;
 
@@ -229,6 +257,7 @@ int logic_add_course(void) {
         return ERROR_INVALID_INPUT;
     }
 
+    /* 选择授课教师 */
     Teacher *teachers = NULL;
     int teacher_count = 0;
     db_get_all_teachers(&teachers, &teacher_count);
@@ -292,7 +321,6 @@ int logic_update_course(void) {
     }
 
     ui_display_course(&course);
-
     printf("\n请输入新信息 (直接回车保持原值):\n");
 
     char buffer[100];
@@ -341,9 +369,14 @@ int logic_delete_course(void) {
     return SUCCESS;
 }
 
+/*============================================================================
+ * 排课管理业务逻辑
+ *============================================================================*/
+
 int logic_add_schedule(void) {
     Schedule schedule;
 
+    /* 选择机房 */
     ComputerRoom *rooms = NULL;
     int room_count = 0;
     db_get_all_rooms(&rooms, &room_count);
@@ -364,6 +397,7 @@ int logic_add_schedule(void) {
     }
     free(rooms);
 
+    /* 选择课程 */
     Course *courses = NULL;
     int course_count = 0;
     db_get_all_courses(&courses, &course_count);
@@ -382,14 +416,16 @@ int logic_add_schedule(void) {
         free(courses);
         return ERROR_NOT_FOUND;
     }
-    schedule.teacher_id = course.teacher_id;
+    schedule.teacher_id = course.teacher_id;  /* 教师从课程中获取 */
     free(courses);
 
+    /* 选择时间 */
     printf("上课时间:\n");
     printf("星期 (1-7, 1=周一, 7=周日): ");
     schedule.day_of_week = ui_input_int_range("", 1, 7);
     schedule.period = ui_input_int_range("第几节课 (1-8): ", 1, 8);
 
+    /* 冲突检测 */
     if (db_check_room_conflict(schedule.room_id, schedule.day_of_week, schedule.period) == ERROR_CONFLICT) {
         ui_show_error("该机房此时段已有排课");
         return ERROR_CONFLICT;
@@ -400,6 +436,7 @@ int logic_add_schedule(void) {
         return ERROR_CONFLICT;
     }
 
+    /* 创建排课记录 */
     int result = db_create_schedule(&schedule);
     if (result == SUCCESS) {
         ui_show_success("排课创建成功");
@@ -440,6 +477,7 @@ int logic_query_schedules(void) {
 
     switch (choice) {
         case 1: {
+            /* 按机房查询 */
             ComputerRoom *rooms = NULL;
             int room_count = 0;
             db_get_all_rooms(&rooms, &room_count);
@@ -457,6 +495,7 @@ int logic_query_schedules(void) {
             break;
         }
         case 2: {
+            /* 按教师查询 */
             Teacher *teachers = NULL;
             int teacher_count = 0;
             db_get_all_teachers(&teachers, &teacher_count);
@@ -474,6 +513,7 @@ int logic_query_schedules(void) {
             break;
         }
         case 3: {
+            /* 按星期查询 */
             int day = ui_input_int_range("请输入星期 (1-7): ", 1, 7);
             result = db_get_schedules_by_day(day, &schedules, &count);
             break;
@@ -482,6 +522,7 @@ int logic_query_schedules(void) {
             return SUCCESS;
     }
 
+    /* 显示查询结果 */
     if (result == SUCCESS) {
         if (count == 0) {
             printf("没有找到排课记录\n");
@@ -515,9 +556,11 @@ int logic_update_schedule(void) {
     printf("  机房ID: %d, 课程ID: %d, 教师ID: %d\n", schedule.room_id, schedule.course_id, schedule.teacher_id);
     printf("  时间: 星期%d, 第%d节课\n", schedule.day_of_week, schedule.period);
 
+    /* 只允许修改时间 */
     int new_day = ui_input_int_range("新星期 (1-7): ", 1, 7);
     int new_period = ui_input_int_range("新课次 (1-8): ", 1, 8);
 
+    /* 冲突检测 */
     if (db_check_room_conflict(schedule.room_id, new_day, new_period) == ERROR_CONFLICT) {
         ui_show_error("该机房此时段已有排课");
         return ERROR_CONFLICT;
@@ -570,9 +613,14 @@ int logic_delete_schedule(void) {
     return SUCCESS;
 }
 
+/*============================================================================
+ * 统计功能
+ *============================================================================*/
+
 int logic_show_statistics(void) {
     ui_show_title("数据统计");
 
+    /* 机房统计 */
     ComputerRoom *rooms = NULL;
     int room_count = 0;
     db_get_all_rooms(&rooms, &room_count);
@@ -595,24 +643,28 @@ int logic_show_statistics(void) {
         free(rooms);
     }
 
+    /* 教师统计 */
     Teacher *teachers = NULL;
     int teacher_count = 0;
     db_get_all_teachers(&teachers, &teacher_count);
     printf("\n教师数量: %d\n", teacher_count);
     free(teachers);
 
+    /* 课程统计 */
     Course *courses = NULL;
     int course_count = 0;
     db_get_all_courses(&courses, &course_count);
     printf("课程数量: %d\n", course_count);
     free(courses);
 
+    /* 排课统计 */
     Schedule *schedules = NULL;
     int schedule_count = 0;
     db_get_all_schedules(&schedules, &schedule_count);
     printf("排课数量: %d\n", schedule_count);
     free(schedules);
 
+    /* 使用率计算 */
     if (schedule_count > 0 && room_count > 0) {
         float usage_rate = (float)schedule_count / (room_count * DAYS_PER_WEEK * PERIODS_PER_DAY) * 100;
         printf("\n总体使用率: %.1f%%\n", usage_rate);

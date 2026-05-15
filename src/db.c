@@ -1,5 +1,19 @@
-#include "db.h"
+/**
+ * @file db.c
+ * @brief 数据库操作模块实现
+ * @author Computer Room Scheduling System
+ * @version 1.0
+ * @date 2024
+ * 
+ * @description
+ * 本文件实现了所有数据库操作函数，使用 SQLite3 作为数据库引擎。
+ * 包含数据库初始化、表创建、CRUD 操作、冲突检测等功能。
+ */
 
+#include "db.h"
+#include "schedule_index.h"
+
+/* 平台相关头文件 */
 #ifdef _WIN32
 #include <windows.h>
 #include <shlobj.h>
@@ -9,18 +23,44 @@
 #include <errno.h>
 #endif
 
+/*============================================================================
+ * 模块私有变量
+ *============================================================================*/
+
+/** @brief SQLite 数据库连接句柄（模块全局） */
 static sqlite3 *db = NULL;
 
+/** @brief 排课内存索引（模块全局），用于 O(1) 冲突检测 */
+static ScheduleIndex *schedule_idx = NULL;
+
+/*============================================================================
+ * 内部辅助函数
+ *============================================================================*/
+
+/**
+ * @brief 确保数据库文件所在目录存在
+ * 
+ * 从文件路径中提取目录路径，如果目录不存在则创建。
+ * 支持跨平台（Windows/Linux）。
+ * 
+ * @param filepath 数据库文件完整路径
+ * @return SUCCESS 成功
+ * @return FAILURE 失败
+ */
 static int ensure_directory_exists(const char *filepath) {
     char dir_path[512];
+    
+    /* 查找最后一个路径分隔符 */
     const char *last_slash = strrchr(filepath, '/');
     const char *last_backslash = strrchr(filepath, '\\');
     const char *last_sep = last_slash > last_backslash ? last_slash : last_backslash;
     
+    /* 如果没有路径分隔符，说明在当前目录 */
     if (!last_sep) {
         return SUCCESS;
     }
     
+    /* 提取目录路径 */
     size_t dir_len = last_sep - filepath;
     if (dir_len >= sizeof(dir_path)) {
         return FAILURE;
@@ -29,6 +69,7 @@ static int ensure_directory_exists(const char *filepath) {
     strncpy(dir_path, filepath, dir_len);
     dir_path[dir_len] = '\0';
     
+    /* 创建目录（平台相关） */
 #ifdef _WIN32
     if (CreateDirectoryA(dir_path, NULL) == 0) {
         if (GetLastError() != ERROR_ALREADY_EXISTS) {
@@ -44,17 +85,25 @@ static int ensure_directory_exists(const char *filepath) {
     return SUCCESS;
 }
 
+/*============================================================================
+ * 数据库生命周期管理
+ *============================================================================*/
+
 int db_init(const char *db_path) {
+    /* 确保数据目录存在 */
     if (ensure_directory_exists(db_path) != SUCCESS) {
         fprintf(stderr, "无法创建数据目录\n");
     }
     
+    /* 打开数据库文件 */
     if (sqlite3_open(db_path, &db) != SQLITE_OK) {
         fprintf(stderr, "无法打开数据库: %s\n", sqlite3_errmsg(db));
         return FAILURE;
     }
 
+    /* 创建数据表（如果不存在） */
     const char *sql =
+        /* 机房表 */
         "CREATE TABLE IF NOT EXISTS computer_room ("
         "    id INTEGER PRIMARY KEY AUTOINCREMENT,"
         "    room_no TEXT UNIQUE NOT NULL,"
@@ -63,6 +112,7 @@ int db_init(const char *db_path) {
         "    status INTEGER DEFAULT 0"
         ");"
 
+        /* 教师表 */
         "CREATE TABLE IF NOT EXISTS teacher ("
         "    id INTEGER PRIMARY KEY AUTOINCREMENT,"
         "    teacher_no TEXT UNIQUE NOT NULL,"
@@ -70,6 +120,7 @@ int db_init(const char *db_path) {
         "    phone TEXT"
         ");"
 
+        /* 课程表 */
         "CREATE TABLE IF NOT EXISTS course ("
         "    id INTEGER PRIMARY KEY AUTOINCREMENT,"
         "    course_no TEXT UNIQUE NOT NULL,"
@@ -79,6 +130,7 @@ int db_init(const char *db_path) {
         "    FOREIGN KEY (teacher_id) REFERENCES teacher(id)"
         ");"
 
+        /* 排课表 */
         "CREATE TABLE IF NOT EXISTS schedule ("
         "    id INTEGER PRIMARY KEY AUTOINCREMENT,"
         "    room_id INTEGER NOT NULL,"
@@ -98,15 +150,31 @@ int db_init(const char *db_path) {
         return FAILURE;
     }
 
+    /* 初始化内存索引，从数据库加载已有排课记录 */
+    schedule_idx = schedule_index_create();
+    if (schedule_idx) {
+        schedule_index_load(schedule_idx);
+    }
+
     return SUCCESS;
 }
 
 void db_close(void) {
+    /* 销毁内存索引 */
+    if (schedule_idx) {
+        schedule_index_destroy(schedule_idx);
+        schedule_idx = NULL;
+    }
+
     if (db) {
         sqlite3_close(db);
         db = NULL;
     }
 }
+
+/*============================================================================
+ * 机房表操作 (computer_room)
+ *============================================================================*/
 
 int db_create_room(ComputerRoom *room) {
     char sql[MAX_SQL_LENGTH];
@@ -115,9 +183,10 @@ int db_create_room(ComputerRoom *room) {
         room->room_no, room->name, room->capacity, room->status);
 
     if (sqlite3_exec(db, sql, NULL, NULL, NULL) != SQLITE_OK) {
-        return ERROR_DUPLICATE;
+        return ERROR_DUPLICATE;  /* 唯一键冲突 */
     }
 
+    /* 获取自增ID */
     room->id = (int)sqlite3_last_insert_rowid(db);
     return SUCCESS;
 }
@@ -133,6 +202,7 @@ int db_get_all_rooms(ComputerRoom **rooms, int *count) {
     *count = 0;
     *rooms = NULL;
 
+    /* 遍历结果集 */
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         *rooms = realloc(*rooms, (*count + 1) * sizeof(ComputerRoom));
         ComputerRoom *r = &(*rooms)[*count];
@@ -195,6 +265,10 @@ int db_delete_room(int id) {
 
     return sqlite3_changes(db) > 0 ? SUCCESS : ERROR_NOT_FOUND;
 }
+
+/*============================================================================
+ * 教师表操作 (teacher)
+ *============================================================================*/
 
 int db_create_teacher(Teacher *teacher) {
     char sql[MAX_SQL_LENGTH];
@@ -281,6 +355,10 @@ int db_delete_teacher(int id) {
 
     return sqlite3_changes(db) > 0 ? SUCCESS : ERROR_NOT_FOUND;
 }
+
+/*============================================================================
+ * 课程表操作 (course)
+ *============================================================================*/
 
 int db_create_course(Course *course) {
     char sql[MAX_SQL_LENGTH];
@@ -370,6 +448,10 @@ int db_delete_course(int id) {
     return sqlite3_changes(db) > 0 ? SUCCESS : ERROR_NOT_FOUND;
 }
 
+/*============================================================================
+ * 排课表操作 (schedule)
+ *============================================================================*/
+
 int db_create_schedule(Schedule *schedule) {
     char sql[MAX_SQL_LENGTH];
     snprintf(sql, sizeof(sql),
@@ -382,6 +464,12 @@ int db_create_schedule(Schedule *schedule) {
     }
 
     schedule->id = (int)sqlite3_last_insert_rowid(db);
+
+    /* 同步更新内存索引 */
+    if (schedule_idx) {
+        schedule_index_add(schedule_idx, schedule);
+    }
+
     return SUCCESS;
 }
 
@@ -438,6 +526,10 @@ int db_get_schedule_by_id(int id, Schedule *schedule) {
 }
 
 int db_update_schedule(Schedule *schedule) {
+    /* 先获取旧记录用于索引更新 */
+    Schedule old_schedule;
+    int has_old = (db_get_schedule_by_id(schedule->id, &old_schedule) == SUCCESS);
+
     char sql[MAX_SQL_LENGTH];
     snprintf(sql, sizeof(sql),
         "UPDATE schedule SET room_id=%d, course_id=%d, teacher_id=%d, day_of_week=%d, period=%d WHERE id=%d;",
@@ -448,10 +540,21 @@ int db_update_schedule(Schedule *schedule) {
         return FAILURE;
     }
 
-    return sqlite3_changes(db) > 0 ? SUCCESS : ERROR_NOT_FOUND;
+    int result = sqlite3_changes(db) > 0 ? SUCCESS : ERROR_NOT_FOUND;
+
+    /* 同步更新内存索引 */
+    if (result == SUCCESS && schedule_idx && has_old) {
+        schedule_index_update(schedule_idx, &old_schedule, schedule);
+    }
+
+    return result;
 }
 
 int db_delete_schedule(int id) {
+    /* 先获取旧记录用于索引更新 */
+    Schedule old_schedule;
+    int has_old = (db_get_schedule_by_id(id, &old_schedule) == SUCCESS);
+
     char sql[MAX_SQL_LENGTH];
     snprintf(sql, sizeof(sql), "DELETE FROM schedule WHERE id = %d;", id);
 
@@ -459,10 +562,22 @@ int db_delete_schedule(int id) {
         return FAILURE;
     }
 
-    return sqlite3_changes(db) > 0 ? SUCCESS : ERROR_NOT_FOUND;
+    int result = sqlite3_changes(db) > 0 ? SUCCESS : ERROR_NOT_FOUND;
+
+    /* 同步更新内存索引 */
+    if (result == SUCCESS && schedule_idx && has_old) {
+        schedule_index_remove(schedule_idx, &old_schedule);
+    }
+
+    return result;
 }
 
+/*============================================================================
+ * 排课详情查询
+ *============================================================================*/
+
 int db_get_schedule_details(ScheduleDetail **details, int *count) {
+    /* 使用 JOIN 查询关联信息 */
     const char *sql =
         "SELECT s.id, s.room_id, r.name, s.course_id, c.name, "
         "       s.teacher_id, t.name, s.day_of_week, s.period "
@@ -498,6 +613,10 @@ int db_get_schedule_details(ScheduleDetail **details, int *count) {
     sqlite3_finalize(stmt);
     return SUCCESS;
 }
+
+/*============================================================================
+ * 条件查询
+ *============================================================================*/
 
 int db_get_schedules_by_room(int room_id, Schedule **schedules, int *count) {
     char sql[MAX_SQL_LENGTH];
@@ -589,7 +708,16 @@ int db_get_schedules_by_day(int day_of_week, Schedule **schedules, int *count) {
     return SUCCESS;
 }
 
+/*============================================================================
+ * 冲突检测
+ *============================================================================*/
+
 int db_check_room_conflict(int room_id, int day_of_week, int period) {
+    /* 优先使用内存索引 O(1)，回退到数据库查询 O(n) */
+    if (schedule_idx) {
+        return schedule_index_check_room_conflict(schedule_idx, room_id, day_of_week, period);
+    }
+
     char sql[MAX_SQL_LENGTH];
     snprintf(sql, sizeof(sql),
         "SELECT COUNT(*) FROM schedule WHERE room_id = %d AND day_of_week = %d AND period = %d;",
@@ -610,6 +738,11 @@ int db_check_room_conflict(int room_id, int day_of_week, int period) {
 }
 
 int db_check_teacher_conflict(int teacher_id, int day_of_week, int period) {
+    /* 优先使用内存索引 O(1)，回退到数据库查询 O(n) */
+    if (schedule_idx) {
+        return schedule_index_check_teacher_conflict(schedule_idx, teacher_id, day_of_week, period);
+    }
+
     char sql[MAX_SQL_LENGTH];
     snprintf(sql, sizeof(sql),
         "SELECT COUNT(*) FROM schedule WHERE teacher_id = %d AND day_of_week = %d AND period = %d;",
@@ -628,6 +761,10 @@ int db_check_teacher_conflict(int teacher_id, int day_of_week, int period) {
     sqlite3_finalize(stmt);
     return count > 0 ? ERROR_CONFLICT : SUCCESS;
 }
+
+/*============================================================================
+ * 统计查询
+ *============================================================================*/
 
 int db_get_room_usage_count(int room_id) {
     char sql[MAX_SQL_LENGTH];
