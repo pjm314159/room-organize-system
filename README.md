@@ -13,6 +13,9 @@
 
 ## 快速开始
 
+## 使用release的编译后产物
+[release](https://github.com/pjm314159/room-organize-system/releases/)
+
 ### 编译
 
 ```bash
