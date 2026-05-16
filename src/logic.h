@@ -3,7 +3,7 @@
  * @brief 业务逻辑模块头文件
  * @author Computer Room Scheduling System
  * @version 1.0
- * @date 2024
+ * @date 2026
  * 
  * @description
  * 本文件声明了所有业务逻辑函数，负责处理用户操作、数据验证、

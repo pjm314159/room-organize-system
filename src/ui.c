@@ -3,7 +3,7 @@
  * @brief 用户界面模块实现
  * @author Computer Room Scheduling System
  * @version 1.0
- * @date 2024
+ * @date 2026
  * 
  * @description
  * 本文件实现了所有用户界面相关函数，包括终端控制、菜单显示、

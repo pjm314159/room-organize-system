@@ -3,7 +3,7 @@
  * @brief 主程序入口
  * @author Computer Room Scheduling System
  * @version 1.0
- * @date 2024
+ * @date 2026
  * 
  * @description
  * 本文件是机房排课系统的主入口，负责：

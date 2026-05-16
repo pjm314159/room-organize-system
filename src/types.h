@@ -3,7 +3,7 @@
  * @brief 公共类型定义头文件
  * @author Computer Room Scheduling System
  * @version 1.0
- * @date 2024
+ * @date 2026
  * 
  * @description
  * 本文件定义了机房排课系统中使用的所有公共数据类型、常量和结构体。

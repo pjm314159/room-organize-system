@@ -3,7 +3,7 @@
  * @brief 用户界面模块头文件
  * @author Computer Room Scheduling System
  * @version 1.0
- * @date 2024
+ * @date 2026
  * 
  * @description
  * 本文件声明了所有用户界面相关函数，包括菜单显示、用户输入处理、

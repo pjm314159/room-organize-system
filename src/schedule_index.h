@@ -3,7 +3,7 @@
  * @brief 排课内存索引模块头文件
  * @author Computer Room Scheduling System
  * @version 1.0
- * @date 2024
+ * @date 2026
  * 
  * @description
  * 本文件声明了排课内存索引相关函数，包括哈希表索引和二维数组索引。

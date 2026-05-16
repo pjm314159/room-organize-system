@@ -3,7 +3,7 @@
  * @brief 数据库操作模块头文件
  * @author Computer Room Scheduling System
  * @version 1.0
- * @date 2024
+ * @date 2026
  * 
  * @description
  * 本文件声明了所有数据库操作函数，包括数据库的初始化、关闭，
